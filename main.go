@@ -2,12 +2,16 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 
+	jwt "github.com/dgrijalva/jwt-go"
+
 	"github.com/gorilla/mux"
 	"github.com/lib/pq"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // These are the three models atruct which has been created
@@ -22,7 +26,11 @@ type JST struct {
 }
 
 type Error struct {
-	msg string
+	Msg string `json : "msg"`
+}
+
+type JWT struct {
+	Token string `json:"token"`
 }
 
 // creating new variable db
@@ -58,14 +66,144 @@ func main() {
 	// if there will be any error while starting the servee
 }
 
+func respondWithError(w http.ResponseWriter, status int, error Error) {
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(error)
+}
+
+func reponseJSON(w http.ResponseWriter, data interface{}) {
+	json.NewEncoder(w).Encode(data)
+}
+
 func signup(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("signup called")
-	w.Write([]byte("successfully caled Signup")) // will get this as a response
+	// creating user variable by User struct type
+	var user User
+	var error Error
+	// Decode returns an error
+	json.NewDecoder(r.Body).Decode(&user)
+
+	// Will do validation here, so email and password should not be empty
+	if user.Email == "" {
+		error.Msg = "Email is missing!"
+		// http.StatusBadRequest is for 400 which is bad request
+		respondWithError(w, http.StatusBadRequest, error)
+		return
+	}
+
+	if user.Password == "" {
+		error.Msg = "Password is missing!"
+		respondWithError(w, http.StatusBadRequest, error)
+		return
+	}
+
+	// bytes which represent the user password and cost will be 10
+	hash, err := bcrypt.GenerateFromPassword([]byte(user.Password), 10)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// converting bytes into string
+	user.Password = string(hash)
+
+	statement := "insert into users (email,password) values ($1, $2) RETURNING id;"
+	// QueryRow will execute one row, Scan is supposed to return an error or nil. If QueryRow will not select any row then it will throw error
+	err = db.QueryRow(statement, user.Email, user.Password).Scan(&user.ID)
+
+	if err != nil {
+		error.Msg = "Server Error"
+		respondWithError(w, http.StatusInternalServerError, error)
+		return
+	}
+	// if its success then return password as empty password , bcoz we don't want to send password explicit even its hashed and it cannot be reversible
+	user.Password = ""
+	// set Header
+	w.Header().Set("Content-Type", "application/json")
+	reponseJSON(w, user)
+}
+
+func GenerateToken(user User) (string, error) {
+	var err error
+	// assign any variable
+	secret := "secret"
+	// there are many claims, which we can go through the docs of JWT
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"email": user.Email,
+		"iss":   "course",
+	})
+
+	// spew.Dump(token)
+	tokenString, err := token.SignedString([]byte(secret))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return tokenString, nil
+
 }
 
 func login(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("login called")
-	w.Write([]byte("successfully caled Login")) // will get this as a response
+	// w.Write([]byte("successfully caled Login")) // will get this as a response
+
+	var user User
+	// JWT will holding the token
+	var jwt JWT
+	// error message will snet to client
+	var error Error
+	// decoded the response body
+	json.NewDecoder(r.Body).Decode(&user)
+	// validating the user amila nd password
+	if user.Email == "" {
+		error.Msg = "Email is missing!"
+		// http.StatusBadRequest is for 400 which is bad request
+		respondWithError(w, http.StatusBadRequest, error)
+		return
+	}
+
+	if user.Password == "" {
+		error.Msg = "Password is missing!"
+		respondWithError(w, http.StatusBadRequest, error)
+		return
+	}
+	//
+	password := user.Password
+	// check the user exist in DB by email, as email will be unique (also we can use ID)
+	row := db.QueryRow("select * from users where email=$1", user.Email)
+	err := row.Scan(&user.ID, &user.Email, &user.Password)
+
+	if err != nil {
+		if err == sql.ErrConnDone {
+			error.Msg = "The User does not exist!"
+			respondWithError(w, http.StatusBadRequest, error)
+			return
+		} else {
+			log.Fatal(err)
+		}
+	}
+
+	// spew.Dump(user) // here the password will be in hashed which need to get decrypted
+
+	hashedPassword := user.Password
+	// copare the hashed password using bcrypt
+	err = bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
+	if err != nil {
+		error.Msg = "Invalid password!"
+		respondWithError(w, http.StatusUnauthorized, error)
+		return
+	}
+
+	token, err := GenerateToken(user)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	w.WriteHeader(http.StatusOK)
+
+	jwt.Token = token
+	reponseJSON(w, jwt)
+
+	// fmt.Println(token)
 }
 func protectedEndpoint(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("TokenVerifyMiddleware called")
