@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 
 	jwt "github.com/dgrijalva/jwt-go"
+	"github.com/subosito/gotenv"
 
 	"github.com/gorilla/mux"
 	"github.com/lib/pq"
@@ -37,8 +39,11 @@ type JWT struct {
 // creating new variable db
 var db *sql.DB
 
+func init() {
+	gotenv.Load()
+}
 func main() {
-	pgUrl, err := pq.ParseURL("POSTGRESURL")
+	pgUrl, err := pq.ParseURL(os.Getenv("ELEPHANTSQL_URL"))
 
 	if err != nil {
 		log.Fatal(err)
@@ -126,7 +131,7 @@ func signup(w http.ResponseWriter, r *http.Request) {
 func GenerateToken(user User) (string, error) {
 	var err error
 	// assign any variable
-	secret := "secret"
+	secret := os.Getenv("SECRET")
 	// there are many claims, which we can go through the docs of JWT
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"email": user.Email,
@@ -227,7 +232,7 @@ func TokenVerifyMiddleware(next http.HandlerFunc) http.HandlerFunc {
 					return nil, fmt.Errorf("There was an error")
 				}
 				// the value will be returned fropm oarse will be token
-				return []byte("secret"), nil
+				return []byte(os.Getenv("SECRET")), nil
 			})
 
 			if error != nil {
