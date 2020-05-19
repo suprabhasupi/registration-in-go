@@ -39,19 +39,6 @@ func main() {
 	// if there will be any error while starting the servee
 }
 
-func respondWithError(w http.ResponseWriter, status int, message string) {
-	var error models.Error
-	error.Msg = message
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(error)
-}
-
-func reponseJSON(w http.ResponseWriter, data interface{}) {
-	// set Header
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(data)
-}
-
 func signup(w http.ResponseWriter, r *http.Request) {
 	// creating user variable by User struct type
 	var user User
@@ -63,13 +50,13 @@ func signup(w http.ResponseWriter, r *http.Request) {
 	if user.Email == "" {
 		error.Msg = "Email is missing!"
 		// http.StatusBadRequest is for 400 which is bad request
-		respondWithError(w, http.StatusBadRequest, error)
+		utils.RespondWithError(w, http.StatusBadRequest, error)
 		return
 	}
 
 	if user.Password == "" {
 		error.Msg = "Password is missing!"
-		respondWithError(w, http.StatusBadRequest, error)
+		utils.RespondWithError(w, http.StatusBadRequest, error)
 		return
 	}
 
@@ -89,12 +76,12 @@ func signup(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		error.Msg = "Server Error"
-		respondWithError(w, http.StatusInternalServerError, error)
+		utils.RespondWithError(w, http.StatusInternalServerError, error)
 		return
 	}
 	// if its success then return password as empty password , bcoz we don't want to send password explicit even its hashed and it cannot be reversible
 	user.Password = ""
-	reponseJSON(w, user)
+	utils.ResponseJSON(w, user)
 }
 
 func GenerateToken(user models.User) (string, error) {
@@ -132,13 +119,13 @@ func login(w http.ResponseWriter, r *http.Request) {
 	if user.Email == "" {
 		error.Msg = "Email is missing!"
 		// http.StatusBadRequest is for 400 which is bad request
-		respondWithError(w, http.StatusBadRequest, error)
+		utils.RespondWithError(w, http.StatusBadRequest, error)
 		return
 	}
 
 	if user.Password == "" {
 		error.Msg = "Password is missing!"
-		respondWithError(w, http.StatusBadRequest, error)
+		utils.RespondWithError(w, http.StatusBadRequest, error)
 		return
 	}
 	//
@@ -150,7 +137,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if err == sql.ErrConnDone {
 			error.Msg = "The User does not exist!"
-			respondWithError(w, http.StatusBadRequest, error)
+			utils.RespondWithError(w, http.StatusBadRequest, error)
 			return
 		} else {
 			log.Fatal(err)
@@ -164,7 +151,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 	err = bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
 	if err != nil {
 		error.Msg = "Invalid password!"
-		respondWithError(w, http.StatusUnauthorized, error)
+		utils.RespondWithError(w, http.StatusUnauthorized, error)
 		return
 	}
 
@@ -176,7 +163,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 
 	jwt.Token = token
-	reponseJSON(w, jwt)
+	utils.ResponseJSON(w, jwt)
 
 	// fmt.Println(token)
 }
@@ -206,7 +193,7 @@ func TokenVerifyMiddleware(next http.HandlerFunc) http.HandlerFunc {
 
 			if error != nil {
 				errorObject.Msg = error.Error()
-				respondWithError(w, http.StatusUnauthorized, errorObject)
+				utils.RespondWithError(w, http.StatusUnauthorized, errorObject)
 				return
 			}
 			// spew.Dump(token) // we will get valid true here
@@ -215,12 +202,12 @@ func TokenVerifyMiddleware(next http.HandlerFunc) http.HandlerFunc {
 				next.ServeHTTP(w, r)
 			} else {
 				errorObject.Msg = error.Error()
-				respondWithError(w, http.StatusUnauthorized, errorObject)
+				utils.RespondWithError(w, http.StatusUnauthorized, errorObject)
 				return
 			}
 		} else {
 			errorObject.Msg = "Invalid Token!"
-			respondWithError(w, http.StatusUnauthorized, errorObject)
+			utils.RespondWithError(w, http.StatusUnauthorized, errorObject)
 			return
 		}
 	})
