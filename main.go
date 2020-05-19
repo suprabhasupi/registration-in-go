@@ -7,34 +7,16 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"registration-in-go/driver"
+	"registration-in-go/models"
 	"strings"
 
 	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/subosito/gotenv"
 
 	"github.com/gorilla/mux"
-	"github.com/lib/pq"
 	"golang.org/x/crypto/bcrypt"
 )
-
-// These are the three models atruct which has been created
-type User struct {
-	ID       int    `json: "id:`
-	Email    string `json: "email"`
-	Password string `json: "password"`
-}
-
-type JST struct {
-	Token string `json : "token"`
-}
-
-type Error struct {
-	Msg string `json : "msg"`
-}
-
-type JWT struct {
-	Token string `json:"token"`
-}
 
 // creating new variable db
 var db *sql.DB
@@ -42,24 +24,9 @@ var db *sql.DB
 func init() {
 	gotenv.Load()
 }
+
 func main() {
-	pgUrl, err := pq.ParseURL(os.Getenv("ELEPHANTSQL_URL"))
-
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// invoke the open sql
-	// first parameter is driver name
-	db, err = sql.Open("postgres", pgUrl)
-	// fmt.Println("db--->", db) // we will get all details of DB
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// Ping will return once value, if there is a connection established successfully the response,will return nil
-	err = db.Ping()
-
+	driver.ConnectDB()
 	router := mux.NewRouter()
 	router.HandleFunc("/signup", signup).Methods("POST")
 	router.HandleFunc("/login", login).Methods("POST")
@@ -72,12 +39,16 @@ func main() {
 	// if there will be any error while starting the servee
 }
 
-func respondWithError(w http.ResponseWriter, status int, error Error) {
+func respondWithError(w http.ResponseWriter, status int, message string) {
+	var error models.Error
+	error.Msg = message
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(error)
 }
 
 func reponseJSON(w http.ResponseWriter, data interface{}) {
+	// set Header
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(data)
 }
 
@@ -123,12 +94,10 @@ func signup(w http.ResponseWriter, r *http.Request) {
 	}
 	// if its success then return password as empty password , bcoz we don't want to send password explicit even its hashed and it cannot be reversible
 	user.Password = ""
-	// set Header
-	w.Header().Set("Content-Type", "application/json")
 	reponseJSON(w, user)
 }
 
-func GenerateToken(user User) (string, error) {
+func GenerateToken(user models.User) (string, error) {
 	var err error
 	// assign any variable
 	secret := os.Getenv("SECRET")
@@ -152,11 +121,11 @@ func login(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("login called")
 	// w.Write([]byte("successfully caled Login")) // will get this as a response
 
-	var user User
+	var user models.User
 	// JWT will holding the token
-	var jwt JWT
+	var jwt models.JWT
 	// error message will snet to client
-	var error Error
+	var error models.Error
 	// decoded the response body
 	json.NewDecoder(r.Body).Decode(&user)
 	// validating the user amila nd password
