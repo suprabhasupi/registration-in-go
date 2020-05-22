@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"registration-in-go/models"
+	userRepository "registration-in-go/repository/user"
 	"registration-in-go/utils"
 
 	"golang.org/x/crypto/bcrypt"
@@ -45,12 +46,9 @@ func (c Controller) Signup(db *sql.DB) http.HandlerFunc {
 		// converting bytes into string
 		user.Password = string(hash)
 
-		statement := "insert into users (email,password) values ($1, $2) RETURNING id;"
-		// QueryRow will execute one row, Scan is supposed to return an error or nil. If QueryRow will not select any row then it will throw error
-		err = db.QueryRow(statement, user.Email, user.Password).Scan(&user.ID)
-
-		// userRepo := userRepository.UserRepository{}
-		// user = userRepo.Signup(db, user)
+		// quering
+		userRepo := userRepository.UserRepository{}
+		user = userRepo.Signup(db, user)
 
 		if err != nil {
 			error.Msg = "Server Error"
@@ -92,11 +90,9 @@ func (c Controller) Login(db *sql.DB) http.HandlerFunc {
 		//
 		password := user.Password
 		// check the user exist in DB by email, as email will be unique (also we can use ID)
-		row := db.QueryRow("select * from users where email=$1", user.Email)
-		err := row.Scan(&user.ID, &user.Email, &user.Password)
 
-		// userRepo := userRepository.UserRepository{}
-		// user, err := userRepo.Login(db, user)
+		userRepo := userRepository.UserRepository{}
+		user, err := userRepo.Login(db, user)
 
 		if err != nil {
 			if err == sql.ErrConnDone {
