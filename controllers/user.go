@@ -1,4 +1,4 @@
-package controller
+package controllers
 
 import (
 	"database/sql"
@@ -6,12 +6,9 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"registration-in-go/models"
 	"registration-in-go/utils"
-	"strings"
 
-	"github.com/dgrijalva/jwt-go"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -52,6 +49,9 @@ func (c Controller) Signup(db *sql.DB) http.HandlerFunc {
 		// QueryRow will execute one row, Scan is supposed to return an error or nil. If QueryRow will not select any row then it will throw error
 		err = db.QueryRow(statement, user.Email, user.Password).Scan(&user.ID)
 
+		// userRepo := userRepository.UserRepository{}
+		// user = userRepo.Signup(db, user)
+
 		if err != nil {
 			error.Msg = "Server Error"
 			utils.RespondWithError(w, http.StatusInternalServerError, error)
@@ -63,8 +63,8 @@ func (c Controller) Signup(db *sql.DB) http.HandlerFunc {
 	}
 }
 
-// Login
-func (c, Controller) Login(db *sql.DB) http.HandlerFunc {
+// Login function
+func (c Controller) Login(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("login called")
 		// w.Write([]byte("successfully caled Login")) // will get this as a response
@@ -94,6 +94,9 @@ func (c, Controller) Login(db *sql.DB) http.HandlerFunc {
 		// check the user exist in DB by email, as email will be unique (also we can use ID)
 		row := db.QueryRow("select * from users where email=$1", user.Email)
 		err := row.Scan(&user.ID, &user.Email, &user.Password)
+
+		// userRepo := userRepository.UserRepository{}
+		// user, err := userRepo.Login(db, user)
 
 		if err != nil {
 			if err == sql.ErrConnDone {
@@ -129,47 +132,4 @@ func (c, Controller) Login(db *sql.DB) http.HandlerFunc {
 		// fmt.Println(token)
 	}
 
-}
-
-// TokenVerifyMiddleware function
-func (c Controller) TokenVerifyMiddleware(next http.HandlerFunc) http.HandlerFunc {
-	fmt.Println("TokenVerifyMiddleware called")
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// return to client any error that ecounter next
-		var errorObject Error
-		// holding the value of authorization header taht we send fromclient to server the request obj has a field called header
-		authHeader := r.Header.Get("Authorization")
-		bearerToken := strings.Split(authHeader, " ")
-		if len(bearerToken) == 2 {
-			authToken := bearerToken[1]
-
-			// to check the token is valid
-			token, error := jwt.Parse(authToken, func(token *jwt.Token) (interface{}, error) {
-				if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-					return nil, fmt.Errorf("There was an error")
-				}
-				// the value will be returned fropm oarse will be token
-				return []byte(os.Getenv("SECRET")), nil
-			})
-
-			if error != nil {
-				errorObject.Msg = error.Error()
-				utils.RespondWithError(w, http.StatusUnauthorized, errorObject)
-				return
-			}
-			// spew.Dump(token) // we will get valid true here
-			if token.Valid {
-				// inbvoke the function that we passed into middleware
-				next.ServeHTTP(w, r)
-			} else {
-				errorObject.Msg = error.Error()
-				utils.RespondWithError(w, http.StatusUnauthorized, errorObject)
-				return
-			}
-		} else {
-			errorObject.Msg = "Invalid Token!"
-			utils.RespondWithError(w, http.StatusUnauthorized, errorObject)
-			return
-		}
-	})
 }

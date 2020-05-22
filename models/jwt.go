@@ -1,5 +1,6 @@
 package models
 
-type JST struct {
-	Token string `json : "token"`
+// JWT model
+type JWT struct {
+	Token string `json:"token"`
 }
